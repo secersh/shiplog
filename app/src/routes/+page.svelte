@@ -51,13 +51,7 @@
         so every release ships with notes your users actually read.
       </p>
 
-      <div class="mt-8 flex flex-wrap items-center gap-3">
-        <a class="btn btn-primary gap-2 shadow-glow" href="#signin">
-          <SiGithub class="h-5 w-5" />
-          Continue with GitHub
-        </a>
-        <span class="text-sm text-neutral/50">Free for 1 repository · no card required</span>
-      </div>
+      <p class="mt-6 text-sm text-neutral/50">Free for 1 repository · no card required</p>
 
       <div class="mt-12 grid gap-5 sm:grid-cols-2">
         {#each features as feature}

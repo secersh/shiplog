@@ -153,30 +153,24 @@
           {/if}
         </div>
       {:else}
-        <div class="overflow-hidden rounded-lg border border-base-300">
-          <table class="table">
-            <tbody>
-              {#each data.recentReleaseNotes as releaseNote}
-                <tr class="border-base-300">
-                  <td class="max-w-0">
-                    <span class="flex min-w-0 items-center gap-2 font-mono text-sm font-medium text-neutral">
-                      <FolderGit2 class="h-4 w-4 shrink-0 text-primary" />
-                      <span class="truncate">{releaseNote.repositoryFullName}</span>
-                    </span>
-                    <a class="mt-1 block text-xs text-neutral/55 transition-colors hover:text-primary" href={`/app/release-notes/${releaseNote.id}`}>
-                      {releaseNote.title}
-                      <span class="font-mono text-neutral/45">· {releaseNote.previous_tag_name} → {releaseNote.tag_name}</span>
-                    </a>
-                  </td>
-                  <td class="text-right align-top whitespace-nowrap">
-                    <span class="badge {releaseNote.status === 'approved' ? 'badge-success' : 'badge-ghost'}">
-                      {releaseNote.status}
-                    </span>
-                  </td>
-                </tr>
-              {/each}
-            </tbody>
-          </table>
+        <div class="divide-y divide-base-300 overflow-hidden rounded-lg border border-base-300">
+          {#each data.recentReleaseNotes as releaseNote}
+            <div class="flex items-start justify-between gap-3 p-3">
+              <div class="min-w-0 flex-1">
+                <span class="flex min-w-0 items-center gap-2 font-mono text-sm font-medium text-neutral">
+                  <FolderGit2 class="h-4 w-4 shrink-0 text-primary" />
+                  <span class="truncate">{releaseNote.repositoryFullName}</span>
+                </span>
+                <a class="mt-1 block text-xs text-neutral/55 transition-colors hover:text-primary" href={`/app/release-notes/${releaseNote.id}`}>
+                  {releaseNote.title}
+                  <span class="font-mono text-neutral/45">· {releaseNote.previous_tag_name} → {releaseNote.tag_name}</span>
+                </a>
+              </div>
+              <span class="badge shrink-0 {releaseNote.status === 'approved' ? 'badge-success' : 'badge-ghost'}">
+                {releaseNote.status}
+              </span>
+            </div>
+          {/each}
         </div>
       {/if}
     </section>
