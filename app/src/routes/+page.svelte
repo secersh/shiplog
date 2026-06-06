@@ -1,10 +1,34 @@
 <script lang="ts">
+  import { page } from '$app/stores';
   import Ship from '@lucide/svelte/icons/ship';
   import ScrollText from '@lucide/svelte/icons/scroll-text';
   import { SiGithub } from '@icons-pack/svelte-simple-icons';
   import Brand from '$lib/components/Brand.svelte';
 
   let { form } = $props();
+
+  const siteName = 'ShipLog';
+  const title = 'ShipLog — Automated GitHub release notes';
+  const description =
+    'ShipLog turns the commits between two GitHub tags into a clean, editable changelog. Connect a repository, watch for new tags, and ship release notes your users actually read.';
+
+  const origin = $derived($page.url.origin);
+  const canonical = $derived(origin + '/');
+  const ogImage = $derived(origin + '/og-image.png');
+
+  const jsonLd = $derived(
+    JSON.stringify({
+      '@context': 'https://schema.org',
+      '@type': 'SoftwareApplication',
+      name: siteName,
+      applicationCategory: 'DeveloperApplication',
+      operatingSystem: 'Web',
+      description,
+      url: canonical,
+      image: ogImage,
+      offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' }
+    })
+  );
 
   const features = [
     {
@@ -21,7 +45,28 @@
 </script>
 
 <svelte:head>
-  <title>ShipLog — Release notes on autopilot</title>
+  <title>{title}</title>
+  <meta name="description" content={description} />
+  <link rel="canonical" href={canonical} />
+  <meta name="robots" content="index, follow" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content={siteName} />
+  <meta property="og:title" content={title} />
+  <meta property="og:description" content={description} />
+  <meta property="og:url" content={canonical} />
+  <meta property="og:image" content={ogImage} />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content={title} />
+  <meta name="twitter:description" content={description} />
+  <meta name="twitter:image" content={ogImage} />
+
+  {@html `<script type="application/ld+json">${jsonLd}</` + `script>`}
 </svelte:head>
 
 <div class="min-h-screen">
@@ -94,7 +139,7 @@
 
           <form class="mt-6" method="POST">
             <button class="btn btn-primary w-full gap-2" type="submit">
-              <SiGithub class="h-5 w-5" />
+              <SiGithub class="h-5 w-5" title="GitHub" />
               Continue with GitHub
             </button>
           </form>

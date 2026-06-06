@@ -28,6 +28,11 @@
     href === '/app' ? pathname === '/app' : pathname.startsWith(href);
 </script>
 
+<svelte:head>
+  <!-- Private application area: keep it out of search indexes. -->
+  <meta name="robots" content="noindex, nofollow" />
+</svelte:head>
+
 <div class="min-h-screen">
   <div class="drawer lg:drawer-open">
     <input id="app-nav" type="checkbox" class="drawer-toggle" />
