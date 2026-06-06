@@ -73,17 +73,28 @@ async function runGeneration(db: SupabaseClient, payload: GeneratePayload) {
       .upload(payload.storagePath, markdown, { contentType: 'text/markdown', upsert: true });
     if (uploadError) throw uploadError;
 
-    const { error: updateError } = await db
+    // Only mark draft if the note is still awaiting generation. If it was
+    // deleted (or otherwise changed) mid-run, this touches 0 rows — so clean
+    // up the file we just uploaded instead of leaving an orphan in Storage.
+    const { data: updated, error: updateError } = await db
       .from('release_notes')
       .update({ status: 'draft', error_message: null })
-      .eq('id', payload.releaseNoteId);
+      .eq('id', payload.releaseNoteId)
+      .eq('status', 'generating')
+      .select('id');
     if (updateError) throw updateError;
+
+    if (!updated || updated.length === 0) {
+      await db.storage.from('release-notes').remove([payload.storagePath]);
+    }
   } catch (err) {
     console.error('Release note generation failed', err);
+    // Best-effort: only flip to failed if the note is still around and generating.
     await db
       .from('release_notes')
       .update({ status: 'failed', error_message: String((err as Error)?.message ?? err) })
-      .eq('id', payload.releaseNoteId);
+      .eq('id', payload.releaseNoteId)
+      .eq('status', 'generating');
   }
 }
 
