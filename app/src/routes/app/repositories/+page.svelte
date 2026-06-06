@@ -1,4 +1,6 @@
 <script lang="ts">
+  import ShipIcon from '$lib/components/icons/ShipIcon.svelte';
+
   let { data, form } = $props();
 
   const repositories = $derived(data.repositories);
@@ -9,14 +11,17 @@
   <title>Repositories | ShipLog</title>
 </svelte:head>
 
-<section class="max-w-5xl">
-  <div class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+<section>
+  <div class="mb-8 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
     <div>
-      <h1 class="text-2xl font-semibold text-neutral">Repositories</h1>
-      <p class="mt-1 text-sm text-neutral/65">Enable repositories after the GitHub App is installed.</p>
+      <h1 class="text-2xl font-semibold tracking-tight text-neutral">Repositories</h1>
+      <p class="mt-1 text-sm text-neutral/60">Enable repositories after the GitHub App is installed.</p>
     </div>
     <form method="POST" action="?/syncGithubRepos">
-      <button class="btn btn-primary" type="submit" disabled={!data.hasGithubInstallation}>
+      <button class="btn btn-primary gap-2" type="submit" disabled={!data.hasGithubInstallation}>
+        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 12a9 9 0 1 1-2.64-6.36" /><path d="M21 3v6h-6" />
+        </svg>
         Sync GitHub repos
       </button>
     </form>
@@ -37,50 +42,53 @@
   {/if}
 
   {#if repositories.length === 0}
-    <div class="rounded-lg border border-dashed border-base-300 bg-base-100 p-8 text-center">
-      <h2 class="text-lg font-semibold text-neutral">No repositories connected</h2>
-      <p class="mx-auto mt-2 max-w-md text-sm leading-6 text-neutral/65">
+    <div class="rounded-xl border border-dashed border-base-300 bg-base-100 p-12 text-center">
+      <ShipIcon class="mx-auto h-10 w-10 text-neutral/30" />
+      <h2 class="mt-4 text-lg font-semibold text-neutral">No repositories connected</h2>
+      <p class="mx-auto mt-2 max-w-md text-sm leading-6 text-neutral/60">
         Install the GitHub App and sync repositories to start generating release notes.
       </p>
     </div>
   {:else}
-    <div class="mb-4 flex flex-col gap-3 rounded-lg border border-base-300 bg-base-100 p-4 sm:flex-row sm:items-center sm:justify-between">
+    <div class="mb-4 flex flex-col gap-3 rounded-xl border border-base-300 bg-base-100 p-4 sm:flex-row sm:items-center sm:justify-between">
       <div>
-        <p class="font-semibold text-neutral">Active repositories</p>
-        <p class="mt-1 text-sm text-neutral/65">
+        <p class="font-medium text-neutral">Active repositories</p>
+        <p class="mt-1 text-sm text-neutral/60">
           Free plan includes {data.repositoryLimit} repository per month. If you change repository
-          access on GitHub, sync repositories again.
+          access on GitHub, sync again.
         </p>
       </div>
       <div class="flex items-center gap-3">
         <div class="badge badge-primary badge-lg">
           {data.usedRepositorySlotCount} / {data.repositoryLimit} used
         </div>
-        <a class="btn btn-sm btn-outline btn-primary" href="/app/billing">Upgrade</a>
+        <a class="btn btn-sm btn-outline" href="/app/billing">Upgrade</a>
       </div>
     </div>
 
-    <div class="overflow-hidden rounded-lg border border-base-300 bg-base-100">
+    <div class="overflow-hidden rounded-xl border border-base-300 bg-base-100">
       <table class="table">
         <thead>
-          <tr>
+          <tr class="border-base-300 text-neutral/55">
             <th>Repository</th>
             <th>Visibility</th>
             <th>Default branch</th>
-            <th>Status</th>
+            <th class="text-right">Status</th>
           </tr>
         </thead>
         <tbody>
           {#each repositories as repository}
-            <tr>
+            <tr class="border-base-300">
               <td>
-                <a class="font-semibold text-primary" href={repository.html_url} target="_blank" rel="noreferrer">
+                <a class="font-medium text-primary hover:underline" href={repository.html_url} target="_blank" rel="noreferrer">
                   {repository.full_name}
                 </a>
               </td>
-              <td>{repository.private ? 'Private' : 'Public'}</td>
-              <td>{repository.default_branch ?? 'Unknown'}</td>
               <td>
+                <span class="badge badge-ghost badge-sm">{repository.private ? 'Private' : 'Public'}</span>
+              </td>
+              <td class="font-mono text-xs text-neutral/60">{repository.default_branch ?? 'unknown'}</td>
+              <td class="text-right">
                 <form method="POST" action="?/toggleRepositoryActive">
                   <input type="hidden" name="repositoryId" value={repository.id} />
                   <input type="hidden" name="nextActive" value={String(!repository.active)} />
@@ -101,7 +109,7 @@
     </div>
 
     {#if isAtRepositoryLimit}
-      <p class="mt-3 text-sm text-neutral/60">
+      <p class="mt-3 text-sm text-neutral/55">
         Monthly limit reached for {data.periodKey}. Upgrade to enable more repositories.
       </p>
     {/if}

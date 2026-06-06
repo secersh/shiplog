@@ -1,4 +1,6 @@
 <script lang="ts">
+  import LogIcon from '$lib/components/icons/LogIcon.svelte';
+
   let { data, form } = $props();
 </script>
 
@@ -6,17 +8,29 @@
   <title>{data.releaseNote.title} | ShipLog</title>
 </svelte:head>
 
-<section class="max-w-6xl">
-  <div class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-    <div>
-      <a class="text-sm text-primary" href="/app/release-notes">Back to release notes</a>
-      <h1 class="mt-2 text-2xl font-semibold text-neutral">{data.releaseNote.title}</h1>
-      <p class="mt-1 text-sm text-neutral/65">
-        {data.releaseNote.repositoryFullName} · {data.releaseNote.previous_tag_name} -> {data.releaseNote.tag_name}
-      </p>
+<section>
+  <a class="inline-flex items-center gap-1.5 text-sm text-neutral/55 transition-colors hover:text-neutral" href="/app/release-notes">
+    <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M19 12H5M12 19l-7-7 7-7" />
+    </svg>
+    Back to release notes
+  </a>
+
+  <div class="mb-6 mt-4 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+    <div class="flex items-start gap-3">
+      <span class="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-secondary/10 text-secondary">
+        <LogIcon class="h-5 w-5" />
+      </span>
+      <div>
+        <h1 class="text-2xl font-semibold tracking-tight text-neutral">{data.releaseNote.title}</h1>
+        <p class="mt-1 text-sm text-neutral/60">
+          {data.releaseNote.repositoryFullName}
+          · <span class="font-mono text-xs">{data.releaseNote.previous_tag_name} → {data.releaseNote.tag_name}</span>
+        </p>
+      </div>
     </div>
     <div class="flex items-center gap-2">
-      <span class="badge {data.releaseNote.status === 'approved' ? 'badge-success' : 'badge-outline'}">
+      <span class="badge {data.releaseNote.status === 'approved' ? 'badge-success' : 'badge-ghost'}">
         {data.releaseNote.status}
       </span>
       {#if data.releaseNote.status !== 'approved'}
@@ -37,7 +51,7 @@
 
   <form class="grid gap-4" method="POST" action="?/saveReleaseNote">
     <textarea
-      class="textarea textarea-bordered min-h-[28rem] font-mono text-sm leading-6"
+      class="textarea textarea-bordered min-h-[28rem] rounded-xl bg-base-100 font-mono text-sm leading-6"
       name="content"
       spellcheck="false"
     >{data.releaseNote.content}</textarea>

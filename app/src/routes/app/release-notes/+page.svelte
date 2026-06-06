@@ -1,4 +1,6 @@
 <script lang="ts">
+  import LogIcon from '$lib/components/icons/LogIcon.svelte';
+
   let { data, form } = $props();
 
   let dialog: HTMLDialogElement;
@@ -64,13 +66,16 @@
   <title>Release Notes | ShipLog</title>
 </svelte:head>
 
-<section class="max-w-5xl">
-  <div class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+<section>
+  <div class="mb-8 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
     <div>
-      <h1 class="text-2xl font-semibold text-neutral">Release Notes</h1>
-      <p class="mt-1 text-sm text-neutral/65">Create and review release note drafts.</p>
+      <h1 class="text-2xl font-semibold tracking-tight text-neutral">Release Notes</h1>
+      <p class="mt-1 text-sm text-neutral/60">Create and review release note drafts.</p>
     </div>
-    <button class="btn btn-primary" disabled={!hasActiveRepositories} onclick={() => dialog.showModal()}>
+    <button class="btn btn-primary gap-2" disabled={!hasActiveRepositories} onclick={() => dialog.showModal()}>
+      <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round">
+        <path d="M12 5v14M5 12h14" />
+      </svg>
       Generate release notes
     </button>
   </div>
@@ -89,7 +94,7 @@
     </div>
   {/if}
 
-  <form class="mb-4 grid gap-3 rounded-lg border border-base-300 bg-base-100 p-4 sm:grid-cols-[1fr_12rem_auto]" method="GET">
+  <form class="mb-4 grid gap-3 rounded-xl border border-base-300 bg-base-100 p-4 sm:grid-cols-[1fr_12rem_auto]" method="GET">
     <label class="form-control">
       <span class="label py-1">
         <span class="label-text">Repository</span>
@@ -122,40 +127,41 @@
   </form>
 
   {#if data.releaseNotes.length === 0}
-    <div class="rounded-lg border border-dashed border-base-300 bg-base-100 p-8 text-center">
-      <h2 class="text-lg font-semibold text-neutral">No release notes yet</h2>
-      <p class="mx-auto mt-2 max-w-md text-sm leading-6 text-neutral/65">
+    <div class="rounded-xl border border-dashed border-base-300 bg-base-100 p-12 text-center">
+      <LogIcon class="mx-auto h-10 w-10 text-neutral/30" />
+      <h2 class="mt-4 text-lg font-semibold text-neutral">No release notes yet</h2>
+      <p class="mx-auto mt-2 max-w-md text-sm leading-6 text-neutral/60">
         Generate release notes from an active repository and tag range.
       </p>
     </div>
   {:else}
-    <div class="overflow-hidden rounded-lg border border-base-300 bg-base-100">
+    <div class="overflow-hidden rounded-xl border border-base-300 bg-base-100">
       <table class="table">
         <thead>
-          <tr>
+          <tr class="border-base-300 text-neutral/55">
             <th>Release</th>
             <th>Range</th>
             <th>Status</th>
             <th>Created</th>
-            <th>Actions</th>
+            <th class="text-right">Actions</th>
           </tr>
         </thead>
         <tbody>
           {#each data.releaseNotes as releaseNote}
-            <tr>
+            <tr class="border-base-300">
               <td>
-                <p class="font-semibold text-neutral">{releaseNote.title}</p>
-                <p class="text-xs text-neutral/55">{releaseNote.repositoryFullName}</p>
+                <p class="font-medium text-neutral">{releaseNote.title}</p>
+                <p class="text-xs text-neutral/50">{releaseNote.repositoryFullName}</p>
               </td>
-              <td>{releaseNote.previous_tag_name} -> {releaseNote.tag_name}</td>
+              <td class="font-mono text-xs text-neutral/60">{releaseNote.previous_tag_name} → {releaseNote.tag_name}</td>
               <td>
-                <span class="badge {releaseNote.status === 'approved' ? 'badge-success' : 'badge-outline'}">
+                <span class="badge {releaseNote.status === 'approved' ? 'badge-success' : 'badge-ghost'}">
                   {releaseNote.status}
                 </span>
               </td>
-              <td>{new Date(releaseNote.created_at).toLocaleDateString()}</td>
+              <td class="text-sm text-neutral/60">{new Date(releaseNote.created_at).toLocaleDateString()}</td>
               <td>
-                <div class="flex flex-wrap gap-2">
+                <div class="flex flex-wrap justify-end gap-2">
                   <a class="btn btn-sm btn-outline" href={`/app/release-notes/${releaseNote.id}`}>View / edit</a>
                   {#if releaseNote.status !== 'approved'}
                     <form method="POST" action="?/approveReleaseNote">
@@ -180,7 +186,11 @@
 <dialog class="modal" bind:this={dialog}>
   <div class="modal-box max-w-2xl">
     <form method="dialog">
-      <button class="btn btn-circle btn-ghost btn-sm absolute right-4 top-4" aria-label="Close">x</button>
+      <button class="btn btn-circle btn-ghost btn-sm absolute right-4 top-4" aria-label="Close">
+        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <path d="M6 6l12 12M18 6 6 18" />
+        </svg>
+      </button>
     </form>
 
     <h2 class="text-lg font-semibold text-neutral">Generate release notes</h2>
