@@ -159,16 +159,16 @@
               {#each data.recentReleaseNotes as releaseNote}
                 <tr class="border-base-300">
                   <td>
-                    <a class="font-medium text-neutral transition-colors hover:text-primary" href={`/app/release-notes/${releaseNote.id}`}>
-                      {releaseNote.title}
-                    </a>
-                    <span class="mt-1 inline-flex max-w-full items-center gap-1.5 rounded-md border border-base-300 bg-base-200/60 px-2 py-0.5 font-mono text-xs text-neutral/75">
-                      <FolderGit2 class="h-3.5 w-3.5 shrink-0 text-neutral/45" />
+                    <span class="flex items-center gap-2 font-mono text-sm font-medium text-neutral">
+                      <FolderGit2 class="h-4 w-4 shrink-0 text-primary" />
                       <span class="truncate">{releaseNote.repositoryFullName}</span>
                     </span>
+                    <a class="mt-1 block truncate text-xs text-neutral/55 transition-colors hover:text-primary" href={`/app/release-notes/${releaseNote.id}`}>
+                      {releaseNote.title}
+                      <span class="font-mono text-neutral/45">· {releaseNote.previous_tag_name} → {releaseNote.tag_name}</span>
+                    </a>
                   </td>
-                  <td class="font-mono text-xs text-neutral/60">{releaseNote.previous_tag_name} → {releaseNote.tag_name}</td>
-                  <td>
+                  <td class="text-right align-top">
                     <span class="badge {releaseNote.status === 'approved' ? 'badge-success' : 'badge-ghost'}">
                       {releaseNote.status}
                     </span>
