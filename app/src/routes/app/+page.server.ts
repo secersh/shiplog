@@ -1,4 +1,4 @@
-import { GITHUB_APP_SLUG } from '$env/static/private';
+import { env } from '$env/dynamic/private';
 import { fail, redirect } from '@sveltejs/kit';
 import { randomUUID } from 'node:crypto';
 
@@ -100,7 +100,7 @@ export const actions = {
       return fail(401, { message: 'Sign in before installing the GitHub App.' });
     }
 
-    if (!GITHUB_APP_SLUG) {
+    if (!env.GITHUB_APP_SLUG) {
       return fail(500, { message: 'GitHub App is not configured.' });
     }
 
@@ -114,7 +114,7 @@ export const actions = {
       secure: url.protocol === 'https:'
     });
 
-    const installUrl = new URL(`https://github.com/apps/${GITHUB_APP_SLUG}/installations/new`);
+    const installUrl = new URL(`https://github.com/apps/${env.GITHUB_APP_SLUG}/installations/new`);
     installUrl.searchParams.set('state', state);
 
     redirect(303, installUrl.toString());
