@@ -3,15 +3,20 @@
   import { env } from '$env/dynamic/public';
   import { createBrowserClient } from '@supabase/ssr';
 
-  let { userId }: { userId: string | null | undefined } = $props();
+  let {
+    accessToken,
+    userId
+  }: { accessToken: string | null | undefined; userId: string | null | undefined } = $props();
 
   $effect(() => {
-    if (!userId) return;
+    if (!accessToken || !userId) return;
 
     const supabase = createBrowserClient(
       env.PUBLIC_SUPABASE_URL,
       env.PUBLIC_SUPABASE_PUBLISHABLE_KEY
     );
+    supabase.realtime.setAuth(accessToken);
+
     const channel = supabase
       .channel(`release-notes-changes-${userId}`)
       .on(

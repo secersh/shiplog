@@ -35,7 +35,7 @@
 </svelte:head>
 
 <div class="min-h-screen">
-  <ReleaseNotesRealtime userId={data.user?.id} />
+  <ReleaseNotesRealtime accessToken={data.session?.access_token} userId={data.user?.id} />
 
   <div class="drawer lg:drawer-open">
     <input id="app-nav" type="checkbox" class="drawer-toggle" />

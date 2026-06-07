@@ -6,6 +6,7 @@ export const load = async ({ locals, url }) => {
   }
 
   return {
+    session: locals.session,
     user: locals.user
   };
 };
