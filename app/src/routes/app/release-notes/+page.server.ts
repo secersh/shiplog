@@ -1,6 +1,8 @@
 import { listRepositoryTags } from '$lib/server/github/app';
 import { fail, redirect } from '@sveltejs/kit';
 
+const RELEASE_NOTE_STATUSES = ['draft', 'approved', 'failed'];
+
 export const load = async ({ locals, url }) => {
   if (!locals.user) {
     redirect(303, `/?next=${encodeURIComponent(url.pathname)}`);
@@ -25,7 +27,7 @@ export const load = async ({ locals, url }) => {
     releaseNotesQuery = releaseNotesQuery.eq('repository_id', repositoryIdFilter);
   }
 
-  if (statusFilter === 'draft' || statusFilter === 'approved') {
+  if (RELEASE_NOTE_STATUSES.includes(statusFilter)) {
     releaseNotesQuery = releaseNotesQuery.eq('status', statusFilter);
   }
 

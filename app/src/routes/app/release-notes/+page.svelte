@@ -126,6 +126,7 @@
         <option value="">All statuses</option>
         <option value="draft" selected={data.filters.status === 'draft'}>Draft</option>
         <option value="approved" selected={data.filters.status === 'approved'}>Approved</option>
+        <option value="failed" selected={data.filters.status === 'failed'}>Failed</option>
       </select>
     </label>
 
