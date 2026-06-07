@@ -1,18 +1,15 @@
 // Supabase Edge Function: generate-release-notes
 //
-// DUMMY worker for now: validates the request, returns 202 immediately, and
-// does the slow work in the background (EdgeRuntime.waitUntil) so neither this
-// request nor the user's web request blocks for 30s. After the delay it writes
-// the generated markdown to Storage and flips the release_notes row to 'draft'.
+// Temporary worker: validates the request, returns 202 immediately, then fetches
+// the selected GitHub tag comparison in the background and stores that raw
+// GitHub data as markdown so we can inspect the future LLM input.
 //
 // All DB/Storage work runs with the *caller's* JWT (the `authenticated` role),
 // which has the table grants + RLS access + storage-folder access it needs.
 // NOTE: the future webhook trigger has no user JWT, so that path will need a
 // service identity (grant the relevant role on release_notes) instead.
 //
-// TODO(real generation): replace the delay + buildDummyMarkdown with
-//   1. fetch the tag range via GitHub (compare / generate-notes) using installationId
-//   2. summarise via the Anthropic API
+// TODO(real generation): replace buildGithubDebugMarkdown with an LLM call.
 //
 // Deploy: supabase functions deploy generate-release-notes
 // (verify_jwt defaults to true, so the caller's user JWT is required.)
@@ -34,8 +31,14 @@ type GeneratePayload = {
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
+const GITHUB_APP_ID = Deno.env.get('GITHUB_APP_ID')!;
+const GITHUB_APP_PRIVATE_KEY = Deno.env.get('GITHUB_APP_PRIVATE_KEY')!;
 
-const DUMMY_DELAY_MS = 30_000;
+const GITHUB_API_HEADERS = {
+  accept: 'application/vnd.github+json',
+  'user-agent': 'ShipLog',
+  'x-github-api-version': '2022-11-28'
+};
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -43,30 +46,285 @@ const json = (body: unknown, status = 200) =>
     headers: { 'content-type': 'application/json' }
   });
 
-function buildDummyMarkdown(payload: GeneratePayload): string {
+type GitHubCompareFile = {
+  filename: string;
+  status: string;
+  additions: number;
+  deletions: number;
+  changes: number;
+  patch?: string;
+  previous_filename?: string;
+};
+
+type GitHubCompareCommit = {
+  sha: string;
+  html_url: string;
+  commit: {
+    message: string;
+    author: {
+      name: string;
+      email: string;
+      date: string;
+    } | null;
+  };
+  author: {
+    login: string;
+    html_url: string;
+  } | null;
+};
+
+type GitHubCompareResponse = {
+  url: string;
+  html_url: string;
+  permalink_url: string;
+  diff_url: string;
+  patch_url: string;
+  base_commit: { sha: string; html_url: string };
+  merge_base_commit: { sha: string; html_url: string };
+  status: string;
+  ahead_by: number;
+  behind_by: number;
+  total_commits: number;
+  commits: GitHubCompareCommit[];
+  files?: GitHubCompareFile[];
+};
+
+async function createGitHubAppJwt() {
+  if (!GITHUB_APP_ID) {
+    throw new Error('GITHUB_APP_ID is not configured.');
+  }
+
+  if (!GITHUB_APP_PRIVATE_KEY) {
+    throw new Error('GITHUB_APP_PRIVATE_KEY is not configured.');
+  }
+
+  const privateKey = await importGitHubPrivateKey(GITHUB_APP_PRIVATE_KEY.replaceAll('\\n', '\n'));
+  const now = Math.floor(Date.now() / 1000);
+  const header = base64UrlEncode(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
+  const payload = base64UrlEncode(
+    JSON.stringify({
+      iat: now - 60,
+      exp: now + 9 * 60,
+      iss: GITHUB_APP_ID
+    })
+  );
+  const unsignedToken = `${header}.${payload}`;
+  const signature = await crypto.subtle.sign(
+    'RSASSA-PKCS1-v1_5',
+    privateKey,
+    new TextEncoder().encode(unsignedToken)
+  );
+
+  return `${unsignedToken}.${base64UrlEncode(signature)}`;
+}
+
+async function importGitHubPrivateKey(pem: string) {
+  const keyData = pem.includes('BEGIN RSA PRIVATE KEY')
+    ? wrapPkcs1PrivateKey(pemToDer(pem))
+    : pemToDer(pem);
+
+  return crypto.subtle.importKey(
+    'pkcs8',
+    keyData,
+    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+}
+
+function pemToDer(pem: string) {
+  const base64 = pem
+    .replace(/-----BEGIN [^-]+-----/g, '')
+    .replace(/-----END [^-]+-----/g, '')
+    .replace(/\s/g, '');
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+
+  return bytes;
+}
+
+function wrapPkcs1PrivateKey(pkcs1: Uint8Array) {
+  const version = new Uint8Array([0x02, 0x01, 0x00]);
+  const rsaAlgorithmIdentifier = new Uint8Array([
+    0x30, 0x0d, 0x06, 0x09, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01, 0x05, 0x00
+  ]);
+
+  return der(0x30, concat(version, rsaAlgorithmIdentifier, der(0x04, pkcs1)));
+}
+
+function der(tag: number, value: Uint8Array) {
+  return concat(new Uint8Array([tag]), derLength(value.length), value);
+}
+
+function derLength(length: number) {
+  if (length < 0x80) {
+    return new Uint8Array([length]);
+  }
+
+  const bytes = [];
+  let remaining = length;
+
+  while (remaining > 0) {
+    bytes.unshift(remaining & 0xff);
+    remaining >>= 8;
+  }
+
+  return new Uint8Array([0x80 | bytes.length, ...bytes]);
+}
+
+function concat(...arrays: Uint8Array[]) {
+  const length = arrays.reduce((total, array) => total + array.length, 0);
+  const result = new Uint8Array(length);
+  let offset = 0;
+
+  for (const array of arrays) {
+    result.set(array, offset);
+    offset += array.length;
+  }
+
+  return result;
+}
+
+function base64UrlEncode(value: string | ArrayBuffer) {
+  const bytes = typeof value === 'string' ? new TextEncoder().encode(value) : new Uint8Array(value);
+  let binary = '';
+
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+
+  return btoa(binary)
+    .replaceAll('+', '-')
+    .replaceAll('/', '_')
+    .replaceAll('=', '');
+}
+
+async function createInstallationAccessToken(installationId: number) {
+  const jwt = await createGitHubAppJwt();
+  const response = await fetch(
+    `https://api.github.com/app/installations/${installationId}/access_tokens`,
+    {
+      method: 'POST',
+      headers: {
+        ...GITHUB_API_HEADERS,
+        authorization: `Bearer ${jwt}`
+      }
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `GitHub installation token request failed with ${response.status}: ${await response.text()}`
+    );
+  }
+
+  const data = (await response.json()) as { token: string };
+  return data.token;
+}
+
+async function fetchGitHubCompare(payload: GeneratePayload) {
+  const token = await createInstallationAccessToken(payload.installationId);
+  const response = await fetch(
+    `https://api.github.com/repos/${payload.owner}/${payload.repo}/compare/${encodeURIComponent(
+      payload.startTag
+    )}...${encodeURIComponent(payload.endTag)}`,
+    {
+      headers: {
+        ...GITHUB_API_HEADERS,
+        authorization: `Bearer ${token}`
+      }
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`GitHub compare request failed with ${response.status}: ${await response.text()}`);
+  }
+
+  return (await response.json()) as GitHubCompareResponse;
+}
+
+function buildGithubDebugMarkdown(payload: GeneratePayload, compare: GitHubCompareResponse): string {
+  const files = compare.files ?? [];
+  const commits = compare.commits ?? [];
+
   return [
     `# ${payload.repositoryFullName} ${payload.endTag}`,
     '',
-    `_Release notes generated from ${payload.startTag} to ${payload.endTag}._`,
+    `_Temporary GitHub compare data from ${payload.startTag} to ${payload.endTag}._`,
     '',
-    '## ✨ Features',
-    '- _Placeholder feature summary (dummy worker)._',
+    '## Compare',
+    `- Status: ${compare.status}`,
+    `- Total commits: ${compare.total_commits}`,
+    `- Ahead by: ${compare.ahead_by}`,
+    `- Behind by: ${compare.behind_by}`,
+    `- URL: ${compare.html_url}`,
+    `- Permalink: ${compare.permalink_url}`,
+    `- Diff URL: ${compare.diff_url}`,
+    `- Patch URL: ${compare.patch_url}`,
+    `- Base commit: ${compare.base_commit?.sha ?? 'unknown'}`,
+    `- Merge base commit: ${compare.merge_base_commit?.sha ?? 'unknown'}`,
     '',
-    '## 🐛 Fixes',
-    '- _Placeholder fix summary (dummy worker)._',
+    '## Commits',
+    commits.length === 0
+      ? '_No commits returned by GitHub._'
+      : commits
+          .map((commit, index) =>
+            [
+              `### ${index + 1}. ${commit.sha.slice(0, 7)}`,
+              '',
+              `- Author: ${commit.author?.login ?? commit.commit.author?.name ?? 'unknown'}`,
+              `- Date: ${commit.commit.author?.date ?? 'unknown'}`,
+              `- URL: ${commit.html_url}`,
+              '',
+              '```txt',
+              commit.commit.message,
+              '```'
+            ].join('\n')
+          )
+          .join('\n\n'),
+    '',
+    '## Files',
+    files.length === 0
+      ? '_No files returned by GitHub._'
+      : files
+          .map((file, index) =>
+            [
+              `### ${index + 1}. ${file.filename}`,
+              '',
+              `- Status: ${file.status}`,
+              file.previous_filename ? `- Previous filename: ${file.previous_filename}` : null,
+              `- Additions: ${file.additions}`,
+              `- Deletions: ${file.deletions}`,
+              `- Changes: ${file.changes}`,
+              '',
+              file.patch
+                ? ['```diff', truncate(file.patch, 12_000), '```'].join('\n')
+                : '_No patch returned._'
+            ]
+              .filter(Boolean)
+              .join('\n')
+          )
+          .join('\n\n'),
     '',
     '---',
-    '> Generated by the ShipLog dummy worker. Real GitHub + AI generation coming soon.',
+    '> Temporary debug output. Replace with LLM-generated release notes after validating GitHub input.',
     ''
   ].join('\n');
 }
 
+function truncate(value: string, maxLength: number) {
+  if (value.length <= maxLength) return value;
+  return `${value.slice(0, maxLength)}\n\n... truncated ${value.length - maxLength} characters ...`;
+}
+
 async function runGeneration(db: SupabaseClient, payload: GeneratePayload) {
   try {
-    // Simulate the cost of fetching commits + calling the model.
-    await new Promise((resolve) => setTimeout(resolve, DUMMY_DELAY_MS));
-
-    const markdown = buildDummyMarkdown(payload);
+    const compare = await fetchGitHubCompare(payload);
+    const markdown = buildGithubDebugMarkdown(payload, compare);
 
     const { error: uploadError } = await db.storage
       .from('release-notes')
