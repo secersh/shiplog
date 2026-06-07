@@ -1,7 +1,7 @@
 <script lang="ts">
   import Ship from '@lucide/svelte/icons/ship';
   import ScrollText from '@lucide/svelte/icons/scroll-text';
-  import { SiGithub } from '@icons-pack/svelte-simple-icons';
+  import GitBranch from '@lucide/svelte/icons/git-branch';
   import { SITE_URL } from '$lib/config';
   import Brand from '$lib/components/Brand.svelte';
 
@@ -139,7 +139,7 @@
 
           <form class="mt-6" method="POST">
             <button class="btn btn-primary w-full gap-2" type="submit">
-              <SiGithub class="h-5 w-5" title="GitHub" />
+              <GitBranch class="h-5 w-5" />
               Continue with GitHub
             </button>
           </form>

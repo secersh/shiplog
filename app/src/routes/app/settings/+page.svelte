@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { SiGithub } from '@icons-pack/svelte-simple-icons';
+  import GitBranch from '@lucide/svelte/icons/git-branch';
   import LogOut from '@lucide/svelte/icons/log-out';
 
   let { data, form } = $props();
@@ -67,7 +67,7 @@
       <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div class="flex items-start gap-3">
           <span class="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-base-200 text-neutral">
-            <SiGithub class="h-5 w-5" />
+            <GitBranch class="h-5 w-5" />
           </span>
           <div>
             <h2 class="font-semibold text-neutral">GitHub installation</h2>
