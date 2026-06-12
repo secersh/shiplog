@@ -10,6 +10,10 @@
   scrollbar-gutter: stable;
 }
 
+html {
+  overflow-y: scroll;
+}
+
 body {
   min-height: 100vh;
   background-color: theme("colors.base-200");

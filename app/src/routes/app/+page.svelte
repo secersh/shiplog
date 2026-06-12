@@ -118,8 +118,8 @@
     </article>
   </div>
 
-  <div class="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
-    <section class="rounded-xl border border-base-300 bg-base-100 p-5">
+  <div class="grid gap-4 xl:grid-cols-4">
+    <section class="rounded-xl border border-base-300 bg-base-100 p-5 xl:col-span-1">
       <div class="mb-4 flex items-center justify-between gap-3">
         <div>
           <h2 class="font-semibold text-neutral">Active repositories</h2>
@@ -147,7 +147,7 @@
       {/if}
     </section>
 
-    <section class="rounded-xl border border-base-300 bg-base-100 p-5">
+    <section class="rounded-xl border border-base-300 bg-base-100 p-5 xl:col-span-3">
       <div class="mb-4 flex items-center justify-between gap-3">
         <div>
           <h2 class="font-semibold text-neutral">Recent release notes</h2>

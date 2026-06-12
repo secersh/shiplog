@@ -5,7 +5,6 @@
 
   let { data, form } = $props();
 
-  let deactivateDialog: HTMLDialogElement;
   let repositoryPendingDeactivation = $state<{ id: string; full_name: string } | null>(null);
 
   const repositories = $derived(data.repositories);
@@ -13,7 +12,10 @@
 
   function openDeactivateDialog(repository: { id: string; full_name: string }) {
     repositoryPendingDeactivation = repository;
-    deactivateDialog.showModal();
+  }
+
+  function closeDeactivateDialog() {
+    repositoryPendingDeactivation = null;
   }
 </script>
 
@@ -149,40 +151,45 @@
   {/if}
 </section>
 
-<dialog class="modal" bind:this={deactivateDialog}>
-  <div class="modal-box max-w-lg">
-    <h2 class="text-lg font-semibold text-neutral">Deactivate repository?</h2>
-    <p class="mt-2 text-sm leading-6 text-neutral/65">
-      ShipLog will stop processing webhook events and generating release notes for this repository.
-    </p>
+{#if repositoryPendingDeactivation}
+  <div
+    class="fixed inset-0 z-50 grid place-items-center bg-black/55 p-4"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="deactivate-repository-title"
+  >
+    <div class="w-full max-w-lg rounded-xl border border-base-300 bg-base-100 p-6 shadow-glow">
+      <h2 id="deactivate-repository-title" class="text-lg font-semibold text-neutral">Deactivate repository?</h2>
+      <p class="mt-2 text-sm leading-6 text-neutral/65">
+        ShipLog will stop processing webhook events and generating release notes for this repository.
+      </p>
 
-    {#if repositoryPendingDeactivation}
       <div class="mt-4 rounded-lg border border-base-300 bg-base-200/50 p-3">
         <p class="font-mono text-sm font-medium text-neutral">
           {repositoryPendingDeactivation.full_name}
         </p>
       </div>
-    {/if}
 
-    <div class="alert alert-warning mt-4 text-sm">
-      On the free plan, deactivating this repository does not free this month's repository slot.
-    </div>
+      <div class="alert alert-warning mt-4 text-sm">
+        On the free plan, deactivating this repository does not free this month's repository slot.
+      </div>
 
-    <div class="modal-action">
-      <form method="dialog">
-        <button class="btn btn-ghost btn-sm">Cancel</button>
-      </form>
+      <div class="mt-6 flex justify-end gap-2">
+        <button class="btn btn-ghost btn-sm" type="button" onclick={closeDeactivateDialog}>Cancel</button>
 
-      {#if repositoryPendingDeactivation}
         <form method="POST" action="?/toggleRepositoryActive">
           <input type="hidden" name="repositoryId" value={repositoryPendingDeactivation.id} />
           <input type="hidden" name="nextActive" value="false" />
           <button class="btn btn-error btn-sm" type="submit">Deactivate repository</button>
         </form>
-      {/if}
+      </div>
     </div>
+
+    <button
+      class="absolute inset-0 -z-10 cursor-default"
+      type="button"
+      aria-label="Close deactivation dialog"
+      onclick={closeDeactivateDialog}
+    ></button>
   </div>
-  <form class="modal-backdrop" method="dialog">
-    <button>close</button>
-  </form>
-</dialog>
+{/if}
