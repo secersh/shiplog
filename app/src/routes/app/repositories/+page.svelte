@@ -1,5 +1,6 @@
 <script lang="ts">
   import FolderGit2 from '@lucide/svelte/icons/folder-git-2';
+  import CircleHelp from '@lucide/svelte/icons/circle-help';
   import RefreshCw from '@lucide/svelte/icons/refresh-cw';
 
   let { data, form } = $props();
@@ -52,21 +53,26 @@
     <div class="mb-4 rounded-xl border border-base-300 bg-base-100 p-4">
       <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p class="text-sm font-medium text-neutral">Free plan repositories</p>
+          <div class="flex items-center gap-1.5">
+            <p class="text-sm font-medium text-neutral">Free plan repositories</p>
+            <span
+              class="tooltip tooltip-right inline-flex h-6 w-6 items-center justify-center rounded-full text-neutral/55 transition-colors hover:bg-base-200 hover:text-neutral"
+              data-tip="Free plan allows 1 repository per month. Deactivating a repo pauses generation but does not free this month's slot. You can switch next month or upgrade."
+            >
+              <CircleHelp class="h-4 w-4" />
+            </span>
+          </div>
           <p class="mt-1 text-xs text-neutral/55">{data.periodKey}</p>
         </div>
         <p class="text-sm text-neutral/65">
           <span class="font-semibold text-neutral">{data.usedRepositorySlotCount}</span> / {data.repositoryLimit} used
         </p>
       </div>
-
-      <div class="mt-3 flex flex-col gap-3 border-t border-base-300 pt-3 sm:flex-row sm:items-center sm:justify-between">
-        <p class="text-sm text-neutral/60">
-          If you change repository access on GitHub, sync again.
-        </p>
-        <a class="btn btn-sm btn-outline" href="/app/billing">Upgrade</a>
-      </div>
     </div>
+
+    <p class="mb-4 text-sm text-neutral/55">
+      If you change repository access on GitHub, sync again.
+    </p>
 
     <div class="overflow-hidden rounded-xl border border-base-300 bg-base-100">
       <table class="table">
@@ -80,6 +86,7 @@
         </thead>
         <tbody>
           {#each repositories as repository}
+            {@const activationBlocked = !repository.active && !repository.usedThisPeriod && isAtRepositoryLimit}
             <tr class="border-base-300">
               <td>
                 <a class="font-medium text-primary hover:underline" href={repository.html_url} target="_blank" rel="noreferrer">
@@ -94,14 +101,23 @@
                 <form method="POST" action="?/toggleRepositoryActive">
                   <input type="hidden" name="repositoryId" value={repository.id} />
                   <input type="hidden" name="nextActive" value={String(!repository.active)} />
-                  <button
-                    class={repository.active ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-outline'}
-                    type="submit"
-                    disabled={!repository.active && !repository.usedThisPeriod && isAtRepositoryLimit}
-                    title={!repository.active && !repository.usedThisPeriod && isAtRepositoryLimit ? 'Free plan limit reached' : undefined}
-                  >
-                    {repository.active ? 'Active' : 'Activate'}
-                  </button>
+                  {#if activationBlocked}
+                    <button
+                      class="btn btn-sm btn-outline"
+                      type="submit"
+                      disabled
+                      aria-label="Activate unavailable: free plan monthly repository quota reached"
+                    >
+                      Activate
+                    </button>
+                  {:else}
+                    <button
+                      class={repository.active ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-outline'}
+                      type="submit"
+                    >
+                      {repository.active ? 'Active' : 'Activate'}
+                    </button>
+                  {/if}
                 </form>
               </td>
             </tr>

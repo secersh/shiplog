@@ -70,7 +70,7 @@
 </svelte:head>
 
 <div class="flex min-h-screen flex-col">
-  <header class="mx-auto flex max-w-6xl items-center justify-between px-6 py-5 lg:px-8">
+  <header class="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-5 lg:px-8">
     <Brand size="md" href="/" />
     <a class="btn btn-sm btn-ghost gap-2" href="#signin">
       Sign in

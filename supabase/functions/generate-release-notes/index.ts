@@ -22,7 +22,7 @@ type GeneratePayload = {
   owner: string;
   repo: string;
   installationId: number;
-  startTag: string;
+  startTag: string | null;
   endTag: string;
   storagePath: string;
 };
@@ -117,6 +117,21 @@ type GitHubCompareResponse = {
   total_commits: number;
   commits: GitHubCompareCommit[];
   files?: GitHubCompareFile[];
+};
+
+type GitHubCommitResponse = GitHubCompareCommit & {
+  files?: GitHubCompareFile[];
+};
+
+type ReleaseInput = {
+  mode: 'compare' | 'initial';
+  rangeUrl: string;
+  status: string;
+  totalCommits: number;
+  aheadBy?: number;
+  behindBy?: number;
+  commits: GitHubCompareCommit[];
+  files: GitHubCompareFile[];
 };
 
 type GeminiGenerateContentResponse = {
@@ -272,6 +287,10 @@ async function createInstallationAccessToken(installationId: number) {
 
 async function fetchGitHubCompare(payload: GeneratePayload) {
   const token = await createInstallationAccessToken(payload.installationId);
+  if (!payload.startTag) {
+    throw new Error('startTag is required for GitHub compare requests.');
+  }
+
   const response = await fetch(
     `https://api.github.com/repos/${payload.owner}/${payload.repo}/compare/${encodeURIComponent(
       payload.startTag
@@ -291,9 +310,73 @@ async function fetchGitHubCompare(payload: GeneratePayload) {
   return (await response.json()) as GitHubCompareResponse;
 }
 
-function buildGeminiPrompt(payload: GeneratePayload, compare: GitHubCompareResponse): string {
-  const files = compare.files ?? [];
-  const commits = compare.commits ?? [];
+async function fetchInitialReleaseInput(payload: GeneratePayload): Promise<ReleaseInput> {
+  const token = await createInstallationAccessToken(payload.installationId);
+  const headers = {
+    ...GITHUB_API_HEADERS,
+    authorization: `Bearer ${token}`
+  };
+
+  const commitsResponse = await fetch(
+    `https://api.github.com/repos/${payload.owner}/${payload.repo}/commits?sha=${encodeURIComponent(
+      payload.endTag
+    )}&per_page=100`,
+    { headers }
+  );
+
+  if (!commitsResponse.ok) {
+    throw new Error(
+      `GitHub initial release commit list failed with ${commitsResponse.status}: ${await commitsResponse.text()}`
+    );
+  }
+
+  const commits = (await commitsResponse.json()) as GitHubCompareCommit[];
+  const taggedCommitSha = commits[0]?.sha ?? payload.endTag;
+  const commitResponse = await fetch(
+    `https://api.github.com/repos/${payload.owner}/${payload.repo}/commits/${encodeURIComponent(taggedCommitSha)}`,
+    { headers }
+  );
+
+  if (!commitResponse.ok) {
+    throw new Error(
+      `GitHub initial release commit fetch failed with ${commitResponse.status}: ${await commitResponse.text()}`
+    );
+  }
+
+  const taggedCommit = (await commitResponse.json()) as GitHubCommitResponse;
+
+  return {
+    mode: 'initial',
+    rangeUrl: taggedCommit.html_url,
+    status: 'initial release',
+    totalCommits: commits.length,
+    commits,
+    files: taggedCommit.files ?? []
+  };
+}
+
+async function fetchReleaseInput(payload: GeneratePayload): Promise<ReleaseInput> {
+  if (!payload.startTag) {
+    return fetchInitialReleaseInput(payload);
+  }
+
+  const compare = await fetchGitHubCompare(payload);
+
+  return {
+    mode: 'compare',
+    rangeUrl: compare.html_url,
+    status: compare.status,
+    totalCommits: compare.total_commits,
+    aheadBy: compare.ahead_by,
+    behindBy: compare.behind_by,
+    commits: compare.commits ?? [],
+    files: compare.files ?? []
+  };
+}
+
+function buildGeminiPrompt(payload: GeneratePayload, input: ReleaseInput): string {
+  const files = input.files;
+  const commits = input.commits;
 
   return [
     `Generate concise, useful markdown release notes for ${payload.repositoryFullName}.`,
@@ -315,13 +398,14 @@ function buildGeminiPrompt(payload: GeneratePayload, compare: GitHubCompareRespo
     '```',
     '',
     'Release range:',
-    `- From: ${payload.startTag}`,
+    `- From: ${payload.startTag ?? 'Initial release'}`,
     `- To: ${payload.endTag}`,
-    `- Compare URL: ${compare.html_url}`,
-    `- Status: ${compare.status}`,
-    `- Total commits: ${compare.total_commits}`,
-    `- Ahead by: ${compare.ahead_by}`,
-    `- Behind by: ${compare.behind_by}`,
+    `- URL: ${input.rangeUrl}`,
+    `- Mode: ${input.mode === 'initial' ? 'Initial release' : 'Tag comparison'}`,
+    `- Status: ${input.status}`,
+    `- Total commits: ${input.totalCommits}`,
+    input.aheadBy === undefined ? null : `- Ahead by: ${input.aheadBy}`,
+    input.behindBy === undefined ? null : `- Behind by: ${input.behindBy}`,
     '',
     'Commits:',
     commits.length === 0
@@ -357,15 +441,17 @@ function buildGeminiPrompt(payload: GeneratePayload, compare: GitHubCompareRespo
           )
           .join('\n\n'),
     ''
-  ].join('\n');
+  ]
+    .filter((line) => line !== null)
+    .join('\n');
 }
 
-async function generateReleaseNotesMarkdown(payload: GeneratePayload, compare: GitHubCompareResponse) {
+async function generateReleaseNotesMarkdown(payload: GeneratePayload, input: ReleaseInput) {
   if (!GEMINI_API_KEY) {
     throw new Error('GEMINI_API_KEY is not configured.');
   }
 
-  const prompt = truncate(buildGeminiPrompt(payload, compare), 120_000);
+  const prompt = truncate(buildGeminiPrompt(payload, input), 120_000);
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
     {
@@ -415,8 +501,8 @@ function truncate(value: string, maxLength: number) {
 
 async function runGeneration(db: SupabaseClient, payload: GeneratePayload) {
   try {
-    const compare = await fetchGitHubCompare(payload);
-    const markdown = await generateReleaseNotesMarkdown(payload, compare);
+    const input = await fetchReleaseInput(payload);
+    const markdown = await generateReleaseNotesMarkdown(payload, input);
 
     const { error: uploadError } = await db.storage
       .from('release-notes')

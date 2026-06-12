@@ -8,6 +8,7 @@
   import FolderGit2 from '@lucide/svelte/icons/folder-git-2';
   import LoaderCircle from '@lucide/svelte/icons/loader-circle';
   import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
+  import CircleHelp from '@lucide/svelte/icons/circle-help';
 
   let { data, form } = $props();
 
@@ -23,9 +24,11 @@
   const hasReleaseNoteQuota = $derived(data.usedReleaseNoteCount < data.releaseNoteLimit);
   const startTagIndex = $derived(tags.findIndex((tag) => tag.name === selectedStartTag));
   const endTagIndex = $derived(tags.findIndex((tag) => tag.name === selectedEndTag));
-  const canChooseTags = $derived(hasActiveRepositories && tags.length >= 2);
+  const canChooseTags = $derived(hasActiveRepositories && tags.length >= 1);
   const hasValidTagRange = $derived(
-    canChooseTags && startTagIndex > -1 && endTagIndex > -1 && startTagIndex > endTagIndex
+    canChooseTags &&
+      endTagIndex > -1 &&
+      (!selectedStartTag || (startTagIndex > -1 && startTagIndex > endTagIndex))
   );
   const canGenerate = $derived(hasReleaseNoteQuota && hasValidTagRange);
   const tagRangeError = $derived(
@@ -58,11 +61,11 @@
       const data = (await response.json()) as { tags: Array<{ name: string; sha: string }> };
       tags = data.tags;
 
-      if (tags.length < 2) {
-        tagsError = 'This repository needs at least two tags.';
+      if (tags.length < 1) {
+        tagsError = 'This repository needs at least one tag.';
       } else {
         selectedEndTag = tags[0].name;
-        selectedStartTag = tags[1].name;
+        selectedStartTag = tags[1]?.name ?? '';
       }
     } catch {
       tagsError = 'Tags could not be loaded. Try syncing repositories or checking GitHub access.';
@@ -112,7 +115,15 @@
   <div class="mb-4 rounded-xl border border-base-300 bg-base-100 p-4">
     <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
       <div>
-        <p class="text-sm font-medium text-neutral">Free plan release notes</p>
+        <div class="flex items-center gap-1.5">
+          <p class="text-sm font-medium text-neutral">Free plan release notes</p>
+          <span
+            class="tooltip tooltip-right inline-flex h-6 w-6 items-center justify-center rounded-full text-neutral/55 transition-colors hover:bg-base-200 hover:text-neutral"
+            data-tip="Free plan allows 20 generated release notes per month. Failed generations still count because they consume generation work."
+          >
+            <CircleHelp class="h-4 w-4" />
+          </span>
+        </div>
         <p class="mt-1 text-xs text-neutral/55">{data.releaseNoteUsagePeriod}</p>
       </div>
       <p class="text-sm text-neutral/65">
@@ -165,7 +176,7 @@
       <ScrollText class="mx-auto h-10 w-10 text-neutral/30" />
       <h2 class="mt-4 text-lg font-semibold text-neutral">No release notes yet</h2>
       <p class="mx-auto mt-2 max-w-md text-sm leading-6 text-neutral/60">
-        Generate release notes from an active repository and tag range.
+        Generate release notes from an active repository and release tag.
       </p>
     </div>
   {:else}
@@ -199,7 +210,7 @@
                   </a>
                 {/if}
               </td>
-              <td class="font-mono text-xs text-neutral/60">{releaseNote.previous_tag_name} → {releaseNote.tag_name}</td>
+              <td class="font-mono text-xs text-neutral/60">{releaseNote.previous_tag_name ?? 'Initial'} → {releaseNote.tag_name}</td>
               <td>
                 {#if releaseNote.status === 'generating'}
                   <span class="badge badge-ghost gap-1.5">
@@ -282,7 +293,7 @@
 
     <h2 class="text-lg font-semibold text-neutral">Generate release notes</h2>
     <p class="mt-1 text-sm text-neutral/65">
-      Choose an active repository and the tag range for the draft.
+      Choose an active repository, an end tag, and optionally a previous tag.
     </p>
     <p class="mt-2 text-xs text-neutral/50">
       {data.usedReleaseNoteCount} / {data.releaseNoteLimit} free release notes used this month.
@@ -325,9 +336,8 @@
             name="startTag"
             bind:value={selectedStartTag}
             disabled={!canChooseTags}
-            required
           >
-            <option value="" disabled>Choose start tag</option>
+            <option value="">Initial release</option>
             {#each tags as tag, index}
               {@const canUseAsStart = !selectedEndTag || index > endTagIndex}
               <option value={tag.name} disabled={!canUseAsStart}>{tag.name}</option>

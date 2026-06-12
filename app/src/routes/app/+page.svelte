@@ -177,12 +177,12 @@
                 {#if hasFile}
                   <a class="mt-1 block text-xs text-neutral/55 transition-colors hover:text-primary" href={`/app/release-notes/${releaseNote.id}`}>
                     {releaseNote.title}
-                    <span class="font-mono text-neutral/45">· {releaseNote.previous_tag_name} → {releaseNote.tag_name}</span>
+                    <span class="font-mono text-neutral/45">· {releaseNote.previous_tag_name ?? 'Initial'} → {releaseNote.tag_name}</span>
                   </a>
                 {:else}
                   <p class="mt-1 text-xs text-neutral/55">
                     {releaseNote.title}
-                    <span class="font-mono text-neutral/45">· {releaseNote.previous_tag_name} → {releaseNote.tag_name}</span>
+                    <span class="font-mono text-neutral/45">· {releaseNote.previous_tag_name ?? 'Initial'} → {releaseNote.tag_name}</span>
                   </p>
                   {#if releaseNote.status === 'failed' && releaseNote.error_message}
                     <p class="mt-0.5 text-xs text-error/80">{releaseNote.error_message}</p>

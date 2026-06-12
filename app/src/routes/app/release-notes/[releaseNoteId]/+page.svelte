@@ -31,7 +31,7 @@
             <FolderGit2 class="h-3.5 w-3.5 shrink-0 text-neutral/45" />
             {data.releaseNote.repositoryFullName}
           </span>
-          <span class="font-mono text-xs text-neutral/55">{data.releaseNote.previous_tag_name} → {data.releaseNote.tag_name}</span>
+          <span class="font-mono text-xs text-neutral/55">{data.releaseNote.previous_tag_name ?? 'Initial'} → {data.releaseNote.tag_name}</span>
         </div>
       </div>
     </div>

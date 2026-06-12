@@ -155,11 +155,11 @@ export const actions = {
     const startTag = String(formData.get('startTag') ?? '');
     const endTag = String(formData.get('endTag') ?? '');
 
-    if (!repositoryId || !startTag || !endTag) {
-      return fail(400, { message: 'Choose a repository and both tags.' });
+    if (!repositoryId || !endTag) {
+      return fail(400, { message: 'Choose a repository and an end tag.' });
     }
 
-    if (startTag === endTag) {
+    if (startTag && startTag === endTag) {
       return fail(400, { message: 'Start and end tags must be different.' });
     }
 
@@ -192,7 +192,7 @@ export const actions = {
       const startTagIndex = tags.findIndex((tag) => tag.name === startTag);
       const endTagIndex = tags.findIndex((tag) => tag.name === endTag);
 
-      if (startTagIndex === -1 || endTagIndex === -1 || startTagIndex <= endTagIndex) {
+      if (endTagIndex === -1 || (startTag && (startTagIndex === -1 || startTagIndex <= endTagIndex))) {
         return fail(400, { message: 'Start tag must be older than end tag.' });
       }
     } catch (error) {
@@ -200,7 +200,9 @@ export const actions = {
       return fail(500, { message: 'Tag range could not be validated. Try again.' });
     }
 
-    const title = `${repository.full_name}: ${startTag} to ${endTag}`;
+    const title = startTag
+      ? `${repository.full_name}: ${startTag} to ${endTag}`
+      : `${repository.full_name}: initial release to ${endTag}`;
     const storagePath = `${locals.user.id}/${repository.full_name}/drafts/${Date.now()}-${endTag}.md`;
 
     // Create the job row and record monthly usage atomically in Postgres, so
@@ -209,7 +211,7 @@ export const actions = {
       'queue_release_note_generation',
       {
         free_monthly_limit: FREE_RELEASE_NOTE_LIMIT,
-        previous_tag_name: startTag,
+        previous_tag_name: startTag || null,
         repository_id: repository.id,
         storage_path: storagePath,
         tag_name: endTag,
@@ -237,7 +239,7 @@ export const actions = {
         owner: repository.owner,
         repo: repository.name,
         installationId,
-        startTag,
+        startTag: startTag || null,
         endTag,
         storagePath
       }
