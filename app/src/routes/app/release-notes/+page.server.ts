@@ -2,6 +2,11 @@ import { listRepositoryTags } from '$lib/server/github/app';
 import { fail, redirect } from '@sveltejs/kit';
 
 const RELEASE_NOTE_STATUSES = ['draft', 'approved', 'failed'];
+const FREE_RELEASE_NOTE_LIMIT = 20;
+
+function getCurrentPeriodKey() {
+  return new Date().toISOString().slice(0, 7);
+}
 
 export const load = async ({ locals, url }) => {
   if (!locals.user) {
@@ -17,6 +22,13 @@ export const load = async ({ locals, url }) => {
     .eq('user_id', locals.user.id)
     .eq('active', true)
     .order('full_name', { ascending: true });
+
+  const periodKey = getCurrentPeriodKey();
+  const { count: usedReleaseNoteCount } = await locals.supabase
+    .from('release_note_usage_periods')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', locals.user.id)
+    .eq('period_key', periodKey);
 
   let releaseNotesQuery = locals.supabase
     .from('release_notes')
@@ -49,11 +61,14 @@ export const load = async ({ locals, url }) => {
       repositoryId: repositoryIdFilter,
       status: statusFilter
     },
+    releaseNoteLimit: FREE_RELEASE_NOTE_LIMIT,
+    releaseNoteUsagePeriod: periodKey,
     releaseNotes: (releaseNotes ?? []).map((releaseNote) => ({
       ...releaseNote,
       repositoryFullName: repositoryNamesById.get(releaseNote.repository_id)
     })),
-    queued: url.searchParams.get('queued') === 'true'
+    queued: url.searchParams.get('queued') === 'true',
+    usedReleaseNoteCount: usedReleaseNoteCount ?? 0
   };
 };
 
@@ -188,24 +203,28 @@ export const actions = {
     const title = `${repository.full_name}: ${startTag} to ${endTag}`;
     const storagePath = `${locals.user.id}/${repository.full_name}/drafts/${Date.now()}-${endTag}.md`;
 
-    // Create the job row up front in a 'generating' state; the edge function
-    // fills in the draft file and flips the status when it finishes.
-    const { data: created, error: insertError } = await locals.supabase
-      .from('release_notes')
-      .insert({
-        user_id: locals.user.id,
-        repository_id: repository.id,
-        status: 'generating',
-        title,
+    // Create the job row and record monthly usage atomically in Postgres, so
+    // parallel submits cannot exceed the free-plan generation quota.
+    const { data: createdReleaseNoteId, error: queueError } = await locals.supabase.rpc(
+      'queue_release_note_generation',
+      {
+        free_monthly_limit: FREE_RELEASE_NOTE_LIMIT,
         previous_tag_name: startTag,
+        repository_id: repository.id,
+        storage_path: storagePath,
         tag_name: endTag,
-        storage_path: storagePath
-      })
-      .select('id')
-      .single();
+        title
+      }
+    );
 
-    if (insertError || !created) {
-      console.error('Failed to create release note job', insertError);
+    if (queueError || !createdReleaseNoteId) {
+      if (queueError?.message?.includes('release_note_quota_exceeded')) {
+        return fail(400, {
+          message: `Free plan supports ${FREE_RELEASE_NOTE_LIMIT} release notes per month. Upgrade to generate more.`
+        });
+      }
+
+      console.error('Failed to create release note job', queueError);
       return fail(500, { message: 'Release notes could not be queued. Try again.' });
     }
 
@@ -213,7 +232,7 @@ export const actions = {
     // the slow work in the background, so this invoke returns quickly.
     const { error: invokeError } = await locals.supabase.functions.invoke('generate-release-notes', {
       body: {
-        releaseNoteId: created.id,
+        releaseNoteId: createdReleaseNoteId,
         repositoryFullName: repository.full_name,
         owner: repository.owner,
         repo: repository.name,
@@ -242,7 +261,7 @@ export const actions = {
       await locals.supabase
         .from('release_notes')
         .update({ status: 'failed', error_message: 'Could not start generation.' })
-        .eq('id', created.id)
+        .eq('id', createdReleaseNoteId)
         .eq('user_id', locals.user.id);
       return fail(502, { message: 'Generation service is unavailable. Try again.' });
     }

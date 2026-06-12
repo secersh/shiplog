@@ -94,10 +94,13 @@
     </article>
     <article class="rounded-xl border border-base-300 bg-base-100 p-5">
       <div class="flex items-center justify-between">
-        <p class="text-sm text-neutral/55">Drafts</p>
+        <p class="text-sm text-neutral/55">Release notes</p>
         <ScrollText class="h-4 w-4 text-neutral/40" />
       </div>
-      <p class="mt-3 text-2xl font-semibold text-neutral">{data.draftCount}</p>
+      <p class="mt-3 text-2xl font-semibold text-neutral">
+        {data.usedReleaseNoteCount} / {data.releaseNoteLimit}
+      </p>
+      <p class="mt-1 text-xs text-neutral/45">{data.repositoryUsagePeriod}</p>
     </article>
     <article class="rounded-xl border bg-base-100 p-5 {data.failedCount > 0 ? 'border-error/40' : 'border-base-300'}">
       <div class="flex items-center justify-between">

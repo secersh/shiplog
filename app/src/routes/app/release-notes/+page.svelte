@@ -20,14 +20,16 @@
   let tagsError = $state('');
 
   const hasActiveRepositories = $derived(data.activeRepositories.length > 0);
+  const hasReleaseNoteQuota = $derived(data.usedReleaseNoteCount < data.releaseNoteLimit);
   const startTagIndex = $derived(tags.findIndex((tag) => tag.name === selectedStartTag));
   const endTagIndex = $derived(tags.findIndex((tag) => tag.name === selectedEndTag));
   const canChooseTags = $derived(hasActiveRepositories && tags.length >= 2);
-  const canGenerate = $derived(
+  const hasValidTagRange = $derived(
     canChooseTags && startTagIndex > -1 && endTagIndex > -1 && startTagIndex > endTagIndex
   );
+  const canGenerate = $derived(hasReleaseNoteQuota && hasValidTagRange);
   const tagRangeError = $derived(
-    selectedStartTag && selectedEndTag && !canGenerate
+    selectedStartTag && selectedEndTag && !hasValidTagRange
       ? 'Start tag must be older than end tag.'
       : ''
   );
@@ -80,7 +82,11 @@
       <h1 class="text-2xl font-semibold tracking-tight text-neutral">Release Notes</h1>
       <p class="mt-1 text-sm text-neutral/60">Create and review release note drafts.</p>
     </div>
-    <button class="btn btn-primary gap-2" disabled={!hasActiveRepositories} onclick={() => dialog.showModal()}>
+    <button
+      class="btn btn-primary gap-2"
+      disabled={!hasActiveRepositories || !hasReleaseNoteQuota}
+      onclick={() => dialog.showModal()}
+    >
       <Plus class="h-4 w-4" />
       Generate release notes
     </button>
@@ -100,6 +106,24 @@
   {#if !hasActiveRepositories}
     <div class="alert alert-warning mb-4 text-sm">
       Activate a repository before generating release notes.
+    </div>
+  {/if}
+
+  <div class="mb-4 rounded-xl border border-base-300 bg-base-100 p-4">
+    <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <p class="text-sm font-medium text-neutral">Free plan release notes</p>
+        <p class="mt-1 text-xs text-neutral/55">{data.releaseNoteUsagePeriod}</p>
+      </div>
+      <p class="text-sm text-neutral/65">
+        <span class="font-semibold text-neutral">{data.usedReleaseNoteCount}</span> / {data.releaseNoteLimit} generated
+      </p>
+    </div>
+  </div>
+
+  {#if !hasReleaseNoteQuota}
+    <div class="alert alert-warning mb-4 text-sm">
+      Free plan monthly release-note quota reached. Upgrade to generate more.
     </div>
   {/if}
 
@@ -259,6 +283,9 @@
     <h2 class="text-lg font-semibold text-neutral">Generate release notes</h2>
     <p class="mt-1 text-sm text-neutral/65">
       Choose an active repository and the tag range for the draft.
+    </p>
+    <p class="mt-2 text-xs text-neutral/50">
+      {data.usedReleaseNoteCount} / {data.releaseNoteLimit} free release notes used this month.
     </p>
 
     <form class="mt-6 grid gap-4" method="POST" action="?/generateReleaseNotes">

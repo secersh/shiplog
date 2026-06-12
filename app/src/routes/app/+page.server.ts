@@ -3,6 +3,7 @@ import { fail, redirect } from '@sveltejs/kit';
 import { randomUUID } from 'node:crypto';
 
 const FREE_REPOSITORY_LIMIT = 1;
+const FREE_RELEASE_NOTE_LIMIT = 20;
 
 function getCurrentPeriodKey() {
   return new Date().toISOString().slice(0, 7);
@@ -46,6 +47,12 @@ export const load = async ({ locals, url }) => {
     .eq('user_id', locals.user.id)
     .eq('period_key', periodKey);
 
+  const { count: usedReleaseNoteCount } = await locals.supabase
+    .from('release_note_usage_periods')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', locals.user.id)
+    .eq('period_key', periodKey);
+
   const { count: draftCount } = await locals.supabase
     .from('release_notes')
     .select('id', { count: 'exact', head: true })
@@ -85,11 +92,13 @@ export const load = async ({ locals, url }) => {
     githubInstallStatus: url.searchParams.get('github_install'),
     repositoryCount: repositoryCount ?? 0,
     repositoryLimit: FREE_REPOSITORY_LIMIT,
+    releaseNoteLimit: FREE_RELEASE_NOTE_LIMIT,
     repositoryUsagePeriod: periodKey,
     recentReleaseNotes: (recentReleaseNotes ?? []).map((releaseNote) => ({
       ...releaseNote,
       repositoryFullName: recentRepositoryNamesById.get(releaseNote.repository_id)
     })),
+    usedReleaseNoteCount: usedReleaseNoteCount ?? 0,
     usedRepositorySlotCount: usedRepositorySlotCount ?? 0
   };
 };

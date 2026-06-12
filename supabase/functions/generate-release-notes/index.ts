@@ -1,15 +1,13 @@
 // Supabase Edge Function: generate-release-notes
 //
-// Temporary worker: validates the request, returns 202 immediately, then fetches
-// the selected GitHub tag comparison in the background and stores that raw
-// GitHub data as markdown so we can inspect the future LLM input.
+// Worker: validates the request, returns 202 immediately, then fetches the
+// selected GitHub tag comparison in the background, asks Gemini to draft release
+// notes, and stores the markdown result.
 //
 // All DB/Storage work runs with the *caller's* JWT (the `authenticated` role),
 // which has the table grants + RLS access + storage-folder access it needs.
 // NOTE: the future webhook trigger has no user JWT, so that path will need a
 // service identity (grant the relevant role on release_notes) instead.
-//
-// TODO(real generation): replace buildGithubDebugMarkdown with an LLM call.
 //
 // Deploy: supabase functions deploy generate-release-notes
 // (verify_jwt defaults to true, so the caller's user JWT is required.)
@@ -33,6 +31,8 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 const GITHUB_APP_ID = Deno.env.get('GITHUB_APP_ID')!;
 const GITHUB_APP_PRIVATE_KEY = Deno.env.get('GITHUB_APP_PRIVATE_KEY')!;
+const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY')!;
+const GEMINI_MODEL = Deno.env.get('GEMINI_MODEL') ?? 'gemini-3.1-flash-lite';
 
 const GITHUB_API_HEADERS = {
   accept: 'application/vnd.github+json',
@@ -87,6 +87,20 @@ type GitHubCompareResponse = {
   total_commits: number;
   commits: GitHubCompareCommit[];
   files?: GitHubCompareFile[];
+};
+
+type GeminiGenerateContentResponse = {
+  candidates?: Array<{
+    content?: {
+      parts?: Array<{
+        text?: string;
+      }>;
+    };
+    finishReason?: string;
+  }>;
+  promptFeedback?: {
+    blockReason?: string;
+  };
 };
 
 async function createGitHubAppJwt() {
@@ -247,73 +261,114 @@ async function fetchGitHubCompare(payload: GeneratePayload) {
   return (await response.json()) as GitHubCompareResponse;
 }
 
-function buildGithubDebugMarkdown(payload: GeneratePayload, compare: GitHubCompareResponse): string {
+function buildGeminiPrompt(payload: GeneratePayload, compare: GitHubCompareResponse): string {
   const files = compare.files ?? [];
   const commits = compare.commits ?? [];
 
   return [
-    `# ${payload.repositoryFullName} ${payload.endTag}`,
+    `Generate concise, useful markdown release notes for ${payload.repositoryFullName}.`,
     '',
-    `_Temporary GitHub compare data from ${payload.startTag} to ${payload.endTag}._`,
+    'Requirements:',
+    '- Return markdown only.',
+    '- Start with a level-one heading containing the repository name and end tag.',
+    '- Include a short summary.',
+    '- Group notable changes under practical headings like Features, Fixes, Changes, or Maintenance when applicable.',
+    '- Mention breaking changes only if the input clearly supports them.',
+    '- Do not invent issue numbers, PR numbers, authors, or changes that are not present in the input.',
+    '- Keep wording clear and product-facing.',
     '',
-    '## Compare',
+    'Release range:',
+    `- From: ${payload.startTag}`,
+    `- To: ${payload.endTag}`,
+    `- Compare URL: ${compare.html_url}`,
     `- Status: ${compare.status}`,
     `- Total commits: ${compare.total_commits}`,
     `- Ahead by: ${compare.ahead_by}`,
     `- Behind by: ${compare.behind_by}`,
-    `- URL: ${compare.html_url}`,
-    `- Permalink: ${compare.permalink_url}`,
-    `- Diff URL: ${compare.diff_url}`,
-    `- Patch URL: ${compare.patch_url}`,
-    `- Base commit: ${compare.base_commit?.sha ?? 'unknown'}`,
-    `- Merge base commit: ${compare.merge_base_commit?.sha ?? 'unknown'}`,
     '',
-    '## Commits',
+    'Commits:',
     commits.length === 0
-      ? '_No commits returned by GitHub._'
+      ? '- No commits returned by GitHub.'
       : commits
           .map((commit, index) =>
             [
-              `### ${index + 1}. ${commit.sha.slice(0, 7)}`,
-              '',
+              `${index + 1}. ${commit.sha.slice(0, 7)}`,
               `- Author: ${commit.author?.login ?? commit.commit.author?.name ?? 'unknown'}`,
               `- Date: ${commit.commit.author?.date ?? 'unknown'}`,
               `- URL: ${commit.html_url}`,
-              '',
-              '```txt',
-              commit.commit.message,
-              '```'
+              `- Message: ${truncate(commit.commit.message, 2_000)}`
             ].join('\n')
           )
           .join('\n\n'),
     '',
-    '## Files',
+    'Changed files:',
     files.length === 0
-      ? '_No files returned by GitHub._'
+      ? '- No files returned by GitHub.'
       : files
           .map((file, index) =>
             [
-              `### ${index + 1}. ${file.filename}`,
-              '',
+              `${index + 1}. ${file.filename}`,
               `- Status: ${file.status}`,
               file.previous_filename ? `- Previous filename: ${file.previous_filename}` : null,
               `- Additions: ${file.additions}`,
               `- Deletions: ${file.deletions}`,
               `- Changes: ${file.changes}`,
-              '',
-              file.patch
-                ? ['```diff', truncate(file.patch, 12_000), '```'].join('\n')
-                : '_No patch returned._'
+              file.patch ? `- Patch:\n\`\`\`diff\n${truncate(file.patch, 6_000)}\n\`\`\`` : '- No patch returned.'
             ]
               .filter(Boolean)
               .join('\n')
           )
           .join('\n\n'),
-    '',
-    '---',
-    '> Temporary debug output. Replace with LLM-generated release notes after validating GitHub input.',
     ''
   ].join('\n');
+}
+
+async function generateReleaseNotesMarkdown(payload: GeneratePayload, compare: GitHubCompareResponse) {
+  if (!GEMINI_API_KEY) {
+    throw new Error('GEMINI_API_KEY is not configured.');
+  }
+
+  const prompt = truncate(buildGeminiPrompt(payload, compare), 120_000);
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
+    {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-goog-api-key': GEMINI_API_KEY
+      },
+      body: JSON.stringify({
+        contents: [
+          {
+            role: 'user',
+            parts: [{ text: prompt }]
+          }
+        ],
+        generationConfig: {
+          maxOutputTokens: 2048,
+          temperature: 0.3
+        }
+      })
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`Gemini generation failed with ${response.status}: ${await response.text()}`);
+  }
+
+  const data = (await response.json()) as GeminiGenerateContentResponse;
+  const markdown =
+    data.candidates?.[0]?.content?.parts
+      ?.map((part) => part.text ?? '')
+      .join('')
+      .trim() ?? '';
+
+  if (!markdown) {
+    const reason = data.promptFeedback?.blockReason ?? data.candidates?.[0]?.finishReason ?? 'unknown';
+    throw new Error(`Gemini returned no release note content. Reason: ${reason}`);
+  }
+
+  return markdown;
 }
 
 function truncate(value: string, maxLength: number) {
@@ -324,7 +379,7 @@ function truncate(value: string, maxLength: number) {
 async function runGeneration(db: SupabaseClient, payload: GeneratePayload) {
   try {
     const compare = await fetchGitHubCompare(payload);
-    const markdown = buildGithubDebugMarkdown(payload, compare);
+    const markdown = await generateReleaseNotesMarkdown(payload, compare);
 
     const { error: uploadError } = await db.storage
       .from('release-notes')
