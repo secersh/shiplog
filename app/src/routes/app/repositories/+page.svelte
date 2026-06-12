@@ -5,8 +5,16 @@
 
   let { data, form } = $props();
 
+  let deactivateDialog: HTMLDialogElement;
+  let repositoryPendingDeactivation = $state<{ id: string; full_name: string } | null>(null);
+
   const repositories = $derived(data.repositories);
   const isAtRepositoryLimit = $derived(data.usedRepositorySlotCount >= data.repositoryLimit);
+
+  function openDeactivateDialog(repository: { id: string; full_name: string }) {
+    repositoryPendingDeactivation = repository;
+    deactivateDialog.showModal();
+  }
 </script>
 
 <svelte:head>
@@ -98,40 +106,34 @@
               </td>
               <td class="font-mono text-xs text-neutral/60">{repository.default_branch ?? 'unknown'}</td>
               <td class="text-right">
-                <form
-                  method="POST"
-                  action="?/toggleRepositoryActive"
-                  onsubmit={(event) => {
-                    if (
-                      repository.active &&
-                      !confirm(
-                        `Deactivate ${repository.full_name}? ShipLog will stop processing webhook events and generating release notes for this repository. On the free plan, this does not free this month's repository slot.`
-                      )
-                    ) {
-                      event.preventDefault();
-                    }
-                  }}
-                >
-                  <input type="hidden" name="repositoryId" value={repository.id} />
-                  <input type="hidden" name="nextActive" value={String(!repository.active)} />
-                  {#if activationBlocked}
-                    <button
-                      class="btn btn-sm btn-outline"
-                      type="submit"
-                      disabled
-                      aria-label="Activate unavailable: free plan monthly repository quota reached"
-                    >
-                      Activate
-                    </button>
-                  {:else}
-                    <button
-                      class={repository.active ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-outline'}
-                      type="submit"
-                    >
-                      {repository.active ? 'Active' : 'Activate'}
-                    </button>
-                  {/if}
-                </form>
+                {#if repository.active}
+                  <button
+                    class="btn btn-sm btn-primary"
+                    type="button"
+                    onclick={() => openDeactivateDialog(repository)}
+                  >
+                    Active
+                  </button>
+                {:else}
+                  <form method="POST" action="?/toggleRepositoryActive">
+                    <input type="hidden" name="repositoryId" value={repository.id} />
+                    <input type="hidden" name="nextActive" value="true" />
+                    {#if activationBlocked}
+                      <button
+                        class="btn btn-sm btn-outline"
+                        type="submit"
+                        disabled
+                        aria-label="Activate unavailable: free plan monthly repository quota reached"
+                      >
+                        Activate
+                      </button>
+                    {:else}
+                      <button class="btn btn-sm btn-outline" type="submit">
+                        Activate
+                      </button>
+                    {/if}
+                  </form>
+                {/if}
               </td>
             </tr>
           {/each}
@@ -146,3 +148,41 @@
     {/if}
   {/if}
 </section>
+
+<dialog class="modal" bind:this={deactivateDialog}>
+  <div class="modal-box max-w-lg">
+    <h2 class="text-lg font-semibold text-neutral">Deactivate repository?</h2>
+    <p class="mt-2 text-sm leading-6 text-neutral/65">
+      ShipLog will stop processing webhook events and generating release notes for this repository.
+    </p>
+
+    {#if repositoryPendingDeactivation}
+      <div class="mt-4 rounded-lg border border-base-300 bg-base-200/50 p-3">
+        <p class="font-mono text-sm font-medium text-neutral">
+          {repositoryPendingDeactivation.full_name}
+        </p>
+      </div>
+    {/if}
+
+    <div class="alert alert-warning mt-4 text-sm">
+      On the free plan, deactivating this repository does not free this month's repository slot.
+    </div>
+
+    <div class="modal-action">
+      <form method="dialog">
+        <button class="btn btn-ghost btn-sm">Cancel</button>
+      </form>
+
+      {#if repositoryPendingDeactivation}
+        <form method="POST" action="?/toggleRepositoryActive">
+          <input type="hidden" name="repositoryId" value={repositoryPendingDeactivation.id} />
+          <input type="hidden" name="nextActive" value="false" />
+          <button class="btn btn-error btn-sm" type="submit">Deactivate repository</button>
+        </form>
+      {/if}
+    </div>
+  </div>
+  <form class="modal-backdrop" method="dialog">
+    <button>close</button>
+  </form>
+</dialog>
