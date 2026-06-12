@@ -98,7 +98,20 @@
               </td>
               <td class="font-mono text-xs text-neutral/60">{repository.default_branch ?? 'unknown'}</td>
               <td class="text-right">
-                <form method="POST" action="?/toggleRepositoryActive">
+                <form
+                  method="POST"
+                  action="?/toggleRepositoryActive"
+                  onsubmit={(event) => {
+                    if (
+                      repository.active &&
+                      !confirm(
+                        `Deactivate ${repository.full_name}? ShipLog will stop processing webhook events and generating release notes for this repository. On the free plan, this does not free this month's repository slot.`
+                      )
+                    ) {
+                      event.preventDefault();
+                    }
+                  }}
+                >
                   <input type="hidden" name="repositoryId" value={repository.id} />
                   <input type="hidden" name="nextActive" value={String(!repository.active)} />
                   {#if activationBlocked}

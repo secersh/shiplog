@@ -20,11 +20,15 @@ export const load = async ({ locals, url }) => {
     .limit(1)
     .maybeSingle();
 
-  const { data: repositories } = await locals.supabase
-    .from('repositories')
-    .select('id, github_repository_id, owner, name, full_name, private, html_url, default_branch, active')
-    .eq('user_id', locals.user.id)
-    .order('full_name', { ascending: true });
+  const { data: repositories } = installation
+    ? await locals.supabase
+        .from('repositories')
+        .select('id, github_repository_id, owner, name, full_name, private, html_url, default_branch, active')
+        .eq('user_id', locals.user.id)
+        .eq('github_installation_id', installation.id)
+        .eq('github_accessible', true)
+        .order('full_name', { ascending: true })
+    : { data: [] };
 
   const activeRepositoryCount = repositories?.filter((repository) => repository.active).length ?? 0;
   const periodKey = getCurrentPeriodKey();
@@ -87,8 +91,27 @@ export const actions = {
       full_name: repo.full_name,
       private: repo.private,
       html_url: repo.html_url,
-      default_branch: repo.default_branch
+      default_branch: repo.default_branch,
+      github_accessible: true
     }));
+
+    const accessibleRepositoryIds = githubRepos.map((repo) => repo.id);
+
+    const inaccessibleQuery = locals.supabase
+      .from('repositories')
+      .update({ active: false, github_accessible: false })
+      .eq('user_id', locals.user.id)
+      .eq('github_installation_id', installation.id);
+
+    const { error: deactivateMissingError } =
+      accessibleRepositoryIds.length > 0
+        ? await inaccessibleQuery.not('github_repository_id', 'in', `(${accessibleRepositoryIds.join(',')})`)
+        : await inaccessibleQuery;
+
+    if (deactivateMissingError) {
+      console.error('Failed to deactivate inaccessible repositories', deactivateMissingError);
+      return fail(500, { message: 'Repository sync could not be saved. Try again.' });
+    }
 
     if (rows.length > 0) {
       const { error } = await locals.supabase.from('repositories').upsert(rows, {
