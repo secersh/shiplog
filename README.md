@@ -6,6 +6,12 @@ Automated GitHub release notes.
 
 Live app: https://shplog.dev
 
+## GitHub App Description
+
+ShipLog turns GitHub tags and commits into clean, editable release notes.
+
+GitHub App: https://github.com/apps/shplog-dev
+
 ## Podcast vs Reality
 
 This repository contains the public build log of a 90-day experiment.
