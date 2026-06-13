@@ -29,7 +29,7 @@
         <li>5 repositories per month</li>
         <li>100 release notes per month</li>
       </ul>
-      <button class="btn btn-outline mt-6 w-full">Upgrade</button>
+      <button class="btn btn-outline mt-6 w-full" disabled>Coming soon</button>
     </article>
 
     <article class="rounded-xl border border-base-300 bg-base-100 p-6">
@@ -39,7 +39,7 @@
         <li>Unlimited repositories</li>
         <li>Unlimited release notes</li>
       </ul>
-      <button class="btn btn-outline mt-6 w-full">Upgrade</button>
+      <button class="btn btn-outline mt-6 w-full" disabled>Coming soon</button>
     </article>
   </div>
 </section>
