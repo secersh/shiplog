@@ -42,8 +42,30 @@
     { value: 'approved', label: 'Approved' },
     { value: 'failed', label: 'Failed' }
   ];
+  const activeRepositoryOptions = $derived(
+    data.activeRepositories.map((repository) => ({
+      value: repository.id,
+      label: repository.full_name
+    }))
+  );
   const startTagIndex = $derived(tags.findIndex((tag) => tag.name === selectedStartTag));
   const endTagIndex = $derived(tags.findIndex((tag) => tag.name === selectedEndTag));
+  const startTagOptions = $derived([
+    { value: '', label: 'Initial release' },
+    ...tags.map((tag, index) => ({
+      value: tag.name,
+      label: tag.name,
+      disabled: Boolean(selectedEndTag && index <= endTagIndex)
+    }))
+  ]);
+  const endTagOptions = $derived([
+    { value: '', label: 'Choose end tag', disabled: true },
+    ...tags.map((tag, index) => ({
+      value: tag.name,
+      label: tag.name,
+      disabled: Boolean(selectedStartTag && index >= startTagIndex)
+    }))
+  ]);
   const canChooseTags = $derived(hasActiveRepositories && tags.length >= 1);
   const hasValidTagRange = $derived(
     canChooseTags &&
@@ -72,13 +94,13 @@
     goto(`${url.pathname}${url.search}`, { keepFocus: true, noScroll: true });
   }
 
-  async function loadTags() {
+  async function loadTags(repositoryId = selectedRepositoryId) {
     tags = [];
     tagsError = '';
     selectedStartTag = '';
     selectedEndTag = '';
 
-    if (!selectedRepositoryId) {
+    if (!repositoryId) {
       return;
     }
 
@@ -86,7 +108,7 @@
 
     try {
       const response = await fetch(
-        `/app/release-notes/tags?repositoryId=${encodeURIComponent(selectedRepositoryId)}`
+        `/app/release-notes/tags?repositoryId=${encodeURIComponent(repositoryId)}`
       );
 
       if (!response.ok) {
@@ -376,17 +398,15 @@
         <span class="label">
           <span class="label-text">Repository</span>
         </span>
-        <select
-          class="select select-bordered"
-          bind:value={selectedRepositoryId}
-          onchange={loadTags}
-          required
-        >
-          <option value="" disabled>Choose repository</option>
-          {#each data.activeRepositories as repository}
-            <option value={repository.id}>{repository.full_name}</option>
-          {/each}
-        </select>
+        <NeoSelect
+          value={selectedRepositoryId}
+          options={activeRepositoryOptions}
+          placeholder="Choose repository"
+          onChange={(repositoryId) => {
+            selectedRepositoryId = repositoryId;
+            loadTags(repositoryId);
+          }}
+        />
       </div>
 
       {#if tagsLoading}
@@ -402,35 +422,25 @@
           <span class="label">
             <span class="label-text">Start tag</span>
           </span>
-          <select
-            class="select select-bordered"
-            bind:value={selectedStartTag}
+          <NeoSelect
+            value={selectedStartTag}
+            options={startTagOptions}
             disabled={!canChooseTags}
-          >
-            <option value="">Initial release</option>
-            {#each tags as tag, index}
-              {@const canUseAsStart = !selectedEndTag || index > endTagIndex}
-              <option value={tag.name} disabled={!canUseAsStart}>{tag.name}</option>
-            {/each}
-          </select>
+            onChange={(startTag) => (selectedStartTag = startTag)}
+          />
         </div>
 
         <div class="form-control">
           <span class="label">
             <span class="label-text">End tag</span>
           </span>
-          <select
-            class="select select-bordered"
-            bind:value={selectedEndTag}
+          <NeoSelect
+            value={selectedEndTag}
+            options={endTagOptions}
             disabled={!canChooseTags}
-            required
-          >
-            <option value="" disabled>Choose end tag</option>
-            {#each tags as tag, index}
-              {@const canUseAsEnd = !selectedStartTag || index < startTagIndex}
-              <option value={tag.name} disabled={!canUseAsEnd}>{tag.name}</option>
-            {/each}
-          </select>
+            placeholder="Choose end tag"
+            onChange={(endTag) => (selectedEndTag = endTag)}
+          />
         </div>
       </div>
 
