@@ -443,6 +443,10 @@
     color: #11100d !important;
   }
 
+  .app-shell :global(.repo-visibility-badge) {
+    box-shadow: none;
+  }
+
   .app-shell :global(.panel-flat) {
     box-shadow: none !important;
   }
